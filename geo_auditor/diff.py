@@ -97,13 +97,21 @@ def load_json_report(path: Path) -> JsonAuditReport:
     """Load and validate a JSON report from *path*."""
 
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _read_json_text(path)
         value: Any = json.loads(text)
     except OSError as exc:
         raise ValueError(f"Cannot read {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(f"Malformed JSON in {path}: {exc.msg}") from exc
     return parse_json_report(value)
+
+
+def _read_json_text(path: Path) -> str:
+    data = path.read_bytes()
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return data.decode("utf-16")
 
 
 def diff_reports(before: JsonAuditReport, after: JsonAuditReport) -> AuditDiff:

@@ -82,6 +82,18 @@ def test_load_json_report_and_diff_files(
     assert any(item.status == "regression" for item in diff.rule_deltas)
 
 
+def test_load_json_report_accepts_utf16_redirect_output(tmp_path: Path) -> None:
+    path = tmp_path / "report.json"
+    path.write_text(
+        json.dumps(
+            {"score": 10, "grade": "F", "results": [{"rule_id": "a", "title": "A", "score": 0}]}
+        ),
+        encoding="utf-16",
+    )
+
+    assert load_json_report(path).score == 10
+
+
 def test_render_diff_formats_are_ascii() -> None:
     before = parse_json_report(_payload(50, "F", [{"rule_id": "a", "title": "A", "score": 0.0}]))
     after = parse_json_report(_payload(100, "A", [{"rule_id": "a", "title": "A", "score": 1.0}]))
