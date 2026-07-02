@@ -7,10 +7,26 @@ import sys
 from pathlib import Path
 
 from geo_auditor import __version__
+from geo_auditor.batch import scan_paths
+from geo_auditor.diff import (
+    diff_report_files,
+    render_diff_json,
+    render_diff_markdown,
+    render_diff_text,
+)
 from geo_auditor.fetch import fetch_url, is_url
 from geo_auditor.llms_txt import generate_llms_txt
 from geo_auditor.parse import parse_content
-from geo_auditor.report import render_json, render_markdown, render_text
+from geo_auditor.report import (
+    render_batch_html,
+    render_batch_json,
+    render_batch_markdown,
+    render_batch_text,
+    render_html,
+    render_json,
+    render_markdown,
+    render_text,
+)
 from geo_auditor.rules import ALL_RULES
 from geo_auditor.score import build_report
 
@@ -46,6 +62,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         "text": render_text,
         "json": render_json,
         "md": render_markdown,
+        "html": render_html,
     }
     print(renderers[args.format](report))
     if args.min_score is not None and report.score < args.min_score:
@@ -54,6 +71,44 @@ def _cmd_check(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    return 0
+
+
+def _cmd_scan(args: argparse.Namespace) -> int:
+    try:
+        report = scan_paths(args.paths)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    renderers = {
+        "text": render_batch_text,
+        "json": render_batch_json,
+        "md": render_batch_markdown,
+        "html": render_batch_html,
+    }
+    print(renderers[args.format](report))
+    if args.min_score is not None and report.average_score < args.min_score:
+        print(
+            "\nFAILED: corpus average score "
+            f"{report.average_score} is below --min-score {args.min_score}.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _cmd_diff(args: argparse.Namespace) -> int:
+    try:
+        diff = diff_report_files(Path(args.before_json), Path(args.after_json))
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    renderers = {
+        "text": render_diff_text,
+        "json": render_diff_json,
+        "md": render_diff_markdown,
+    }
+    print(renderers[args.format](diff))
     return 0
 
 
@@ -106,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", parents=[common], help="Audit a page.")
     check.add_argument(
         "--format",
-        choices=("text", "json", "md"),
+        choices=("text", "json", "md", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -117,6 +172,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero if the score is below this threshold (for CI gates).",
     )
     check.set_defaults(func=_cmd_check)
+
+    scan = sub.add_parser("scan", help="Audit a local content corpus.")
+    scan.add_argument("paths", nargs="+", help="Local files or directories to scan.")
+    scan.add_argument(
+        "--format",
+        choices=("text", "json", "md", "html"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    scan.add_argument(
+        "--min-score",
+        type=int,
+        default=None,
+        help=("Exit non-zero if the corpus average score is below this threshold (for CI gates)."),
+    )
+    scan.set_defaults(func=_cmd_scan)
+
+    diff = sub.add_parser("diff", help="Compare two JSON audit reports.")
+    diff.add_argument("before_json", help="Earlier geo-audit check --format json output.")
+    diff.add_argument("after_json", help="Later geo-audit check --format json output.")
+    diff.add_argument(
+        "--format",
+        choices=("text", "json", "md"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    diff.set_defaults(func=_cmd_diff)
 
     rules = sub.add_parser("rules", help="List all rules.")
     rules.set_defaults(func=_cmd_rules)

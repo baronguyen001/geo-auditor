@@ -33,6 +33,107 @@ def test_check_markdown_format(capsys: pytest.CaptureFixture[str], fixtures_dir:
     assert out.startswith("# GEO/AEO readiness report")
 
 
+def test_check_html_format(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["check", str(fixtures_dir / "strong_page.html"), "--format", "html"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("<!doctype html>")
+    assert "GEO/AEO readiness report" in out
+
+
+def test_scan_markdown(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["scan", str(fixtures_dir), "--format", "md"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("# GEO/AEO batch scan")
+    assert "Leaderboard" in out
+
+
+def test_scan_html(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["scan", str(fixtures_dir), "--format", "html"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("<!doctype html>")
+    assert "GEO/AEO batch scan" in out
+
+
+def test_scan_min_score_gate_fails(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["scan", str(fixtures_dir), "--min-score", "100"])
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "corpus average" in err
+
+
+def test_scan_no_matching_files(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+    code = main(["scan", str(tmp_path)])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "No matching" in err
+
+
+def test_scan_rejects_urls(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["scan", "https://example.com"])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "URLs" in err
+
+
+def test_diff_command(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    fixtures_dir: Path,
+) -> None:
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    main(["check", str(fixtures_dir / "strong_page.html"), "--format", "json"])
+    before.write_text(capsys.readouterr().out, encoding="utf-8")
+    main(["check", str(fixtures_dir / "weak_page.md"), "--format", "json"])
+    after.write_text(capsys.readouterr().out, encoding="utf-8")
+
+    code = main(["diff", str(before), str(after)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "GEO/AEO audit diff" in out
+    assert "REGRESSION" in out
+
+
+def test_diff_json_format(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(
+        json.dumps(
+            {
+                "score": 0,
+                "grade": "F",
+                "results": [{"rule_id": "a", "title": "A", "score": 0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    after.write_text(
+        json.dumps(
+            {"score": 100, "grade": "A", "results": [{"rule_id": "a", "title": "A", "score": 1}]}
+        ),
+        encoding="utf-8",
+    )
+    code = main(["diff", str(before), str(after), "--format", "json"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert json.loads(out)["score_delta"] == 100
+
+
+def test_diff_malformed_json(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text("{bad", encoding="utf-8")
+    after.write_text("{}", encoding="utf-8")
+    code = main(["diff", str(before), str(after)])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "Malformed JSON" in err
+
+
 def test_rules_command(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["rules"])
     out = capsys.readouterr().out

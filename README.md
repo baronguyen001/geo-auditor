@@ -68,8 +68,19 @@ geo-audit check https://yoursite.com/post
 geo-audit check article.html --format json
 geo-audit check article.html --format md
 
+# Demo-ready static HTML output
+geo-audit check article.html --format html > report.html
+
 # Use it as a CI gate (exits non-zero below the threshold)
 geo-audit check article.html --min-score 70
+
+# Audit a local content folder as one corpus
+geo-audit scan content/ --format md --min-score 75
+
+# Compare two JSON reports after edits
+geo-audit check before.html --format json > before.json
+geo-audit check after.html --format json > after.json
+geo-audit diff before.json after.json
 
 # List every rule and its weight
 geo-audit rules
@@ -83,7 +94,11 @@ geo-audit init-llms index.html --site-name "Your Brand"
 ```yaml
 - run: pip install geo-auditor
 - run: geo-audit check dist/index.html --min-score 75
+- run: geo-audit scan dist/content --min-score 75
 ```
+
+`scan --min-score` gates on the corpus average score, so one weak page does not
+hide the folder-level trend.
 
 ### Use it as a library
 
@@ -95,6 +110,21 @@ report = build_report(doc)
 print(report.score, report.grade)
 print(render_markdown(report))
 ```
+
+## Workflow reports
+
+Use `--format html` for a self-contained, printable report with the overall
+grade, category bars, and the worst-first checks table. It has inline CSS only:
+no JavaScript, no CDN, no fonts, and no network access.
+
+Use `geo-audit scan` when a content folder matters more than one page. It accepts
+local files and directories, recursively scans `.html`, `.htm`, `.md`, and
+`.markdown` files in deterministic order, and reports the worst pages and worst
+rules across the corpus.
+
+Use `geo-audit diff` to close the edit-audit-measure loop. Save two
+`geo-audit check --format json` reports, then compare them to see overall score
+movement plus per-rule regressions and improvements.
 
 ## What it checks (14 rules, 4 pillars)
 

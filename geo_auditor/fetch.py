@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import urllib.request
 
-_USER_AGENT = "geo-auditor/0.1 (+https://github.com/baronguyen001/geo-auditor)"
+_USER_AGENT = "geo-auditor/0.2 (+https://github.com/baronguyen001/geo-auditor)"
 
 
 def is_url(target: str) -> bool:
