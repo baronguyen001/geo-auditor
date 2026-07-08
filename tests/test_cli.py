@@ -57,6 +57,19 @@ def test_scan_html(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> No
     assert "GEO/AEO batch scan" in out
 
 
+def test_scan_honors_config(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    fixtures_dir: Path,
+) -> None:
+    config = tmp_path / ".geo-audit.toml"
+    config.write_text('[rules]\ndisabled = ["answer-first"]\n', encoding="utf-8")
+    code = main(["scan", "--config", str(config), str(fixtures_dir), "--format", "json"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "answer-first" not in out
+
+
 def test_scan_min_score_gate_fails(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
     code = main(["scan", str(fixtures_dir), "--min-score", "100"])
     err = capsys.readouterr().err
@@ -140,6 +153,84 @@ def test_rules_command(capsys: pytest.CaptureFixture[str]) -> None:
     assert code == 0
     assert "answer-first" in out
     assert "freshness-signal" in out
+    assert "alt-text" in out
+
+
+def test_rules_command_honors_config(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    config = tmp_path / ".geo-audit.toml"
+    config.write_text(
+        '[rules]\nweights = { answer-first = 5 }\ndisabled = ["faq"]\n',
+        encoding="utf-8",
+    )
+    code = main(["rules", "--config", str(config)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "answer-first" in out
+    assert "w=5.0" in out
+    assert "faq" not in out
+
+
+def test_check_honors_config_defaults(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    fixtures_dir: Path,
+) -> None:
+    config = tmp_path / ".geo-audit.toml"
+    config.write_text("[defaults]\nmin_score = 80\n", encoding="utf-8")
+    code = main(["check", "--config", str(config), str(fixtures_dir / "weak_page.md")])
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "below --min-score 80" in err
+
+
+def test_check_explicit_min_score_overrides_config(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    fixtures_dir: Path,
+) -> None:
+    config = tmp_path / ".geo-audit.toml"
+    config.write_text("[defaults]\nmin_score = 100\n", encoding="utf-8")
+    code = main(
+        [
+            "check",
+            "--config",
+            str(config),
+            str(fixtures_dir / "weak_page.md"),
+            "--min-score",
+            "0",
+        ]
+    )
+    assert code == 0
+    capsys.readouterr()
+
+
+def test_fix_json_top(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["fix", str(fixtures_dir / "weak_page.md"), "--format", "json", "--top", "2"])
+    out = capsys.readouterr().out
+    assert code == 0
+    data = json.loads(out)
+    assert len(data["items"]) == 2
+    assert data["total_recoverable_points"] > 0
+
+
+def test_fix_markdown(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["fix", str(fixtures_dir / "weak_page.md"), "--format", "md"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("# GEO/AEO remediation plan")
+
+
+def test_fix_honors_config(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    fixtures_dir: Path,
+) -> None:
+    config = tmp_path / ".geo-audit.toml"
+    config.write_text('[rules]\ndisabled = ["answer-first"]\n', encoding="utf-8")
+    code = main(["fix", "--config", str(config), str(fixtures_dir / "weak_page.md")])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "answer-first" not in out
 
 
 def test_init_llms(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:

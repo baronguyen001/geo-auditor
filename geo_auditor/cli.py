@@ -8,6 +8,7 @@ from pathlib import Path
 
 from geo_auditor import __version__
 from geo_auditor.batch import scan_paths
+from geo_auditor.config import apply_config, load_config
 from geo_auditor.diff import (
     diff_report_files,
     render_diff_json,
@@ -17,6 +18,12 @@ from geo_auditor.diff import (
 from geo_auditor.fetch import fetch_url, is_url
 from geo_auditor.llms_txt import generate_llms_txt
 from geo_auditor.parse import parse_content
+from geo_auditor.remediate import (
+    build_remediation,
+    render_remediation_json,
+    render_remediation_markdown,
+    render_remediation_text,
+)
 from geo_auditor.report import (
     render_batch_html,
     render_batch_json,
@@ -28,6 +35,7 @@ from geo_auditor.report import (
     render_text,
 )
 from geo_auditor.rules import ALL_RULES
+from geo_auditor.rules.base import Rule
 from geo_auditor.score import build_report
 
 
@@ -50,14 +58,28 @@ def _load(target: str, *, offline: bool, timeout: float) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _rules_from_args(args: argparse.Namespace) -> tuple[Rule, ...]:
+    config = load_config(args.config)
+    return apply_config(ALL_RULES, config)
+
+
+def _min_score_from_args(args: argparse.Namespace) -> int | None:
+    if args.min_score is not None:
+        return args.min_score
+    config = load_config(args.config)
+    return config.defaults.min_score
+
+
 def _cmd_check(args: argparse.Namespace) -> int:
     try:
         text = _load(args.target, offline=args.offline, timeout=args.timeout)
+        rules = _rules_from_args(args)
+        min_score = _min_score_from_args(args)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     doc = parse_content(text, fmt=args.format_in)
-    report = build_report(doc)
+    report = build_report(doc, rules=rules)
     renderers = {
         "text": render_text,
         "json": render_json,
@@ -65,9 +87,9 @@ def _cmd_check(args: argparse.Namespace) -> int:
         "html": render_html,
     }
     print(renderers[args.format](report))
-    if args.min_score is not None and report.score < args.min_score:
+    if min_score is not None and report.score < min_score:
         print(
-            f"\nFAILED: score {report.score} is below --min-score {args.min_score}.",
+            f"\nFAILED: score {report.score} is below --min-score {min_score}.",
             file=sys.stderr,
         )
         return 1
@@ -76,7 +98,9 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_scan(args: argparse.Namespace) -> int:
     try:
-        report = scan_paths(args.paths)
+        rules = _rules_from_args(args)
+        min_score = _min_score_from_args(args)
+        report = scan_paths(args.paths, rules=rules)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -87,13 +111,32 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         "html": render_batch_html,
     }
     print(renderers[args.format](report))
-    if args.min_score is not None and report.average_score < args.min_score:
+    if min_score is not None and report.average_score < min_score:
         print(
             "\nFAILED: corpus average score "
-            f"{report.average_score} is below --min-score {args.min_score}.",
+            f"{report.average_score} is below --min-score {min_score}.",
             file=sys.stderr,
         )
         return 1
+    return 0
+
+
+def _cmd_fix(args: argparse.Namespace) -> int:
+    try:
+        text = _load(args.target, offline=args.offline, timeout=args.timeout)
+        rules = _rules_from_args(args)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    doc = parse_content(text, fmt=args.format_in)
+    report = build_report(doc, rules=rules)
+    plan = build_remediation(report, top=args.top)
+    renderers = {
+        "text": render_remediation_text,
+        "json": render_remediation_json,
+        "md": render_remediation_markdown,
+    }
+    print(renderers[args.format](plan))
     return 0
 
 
@@ -112,9 +155,14 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_rules(_: argparse.Namespace) -> int:
+def _cmd_rules(args: argparse.Namespace) -> int:
+    try:
+        rules = _rules_from_args(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print("geo-auditor rules:")
-    for rule in ALL_RULES:
+    for rule in rules:
         print(f"  {rule.id:<20} [{rule.category.value:<16}] w={rule.weight:<4} {rule.title}")
     return 0
 
@@ -138,7 +186,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"geo-auditor {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    common = argparse.ArgumentParser(add_help=False)
+    config_common = argparse.ArgumentParser(add_help=False)
+    config_common.add_argument(
+        "--config",
+        default=None,
+        help="Path to a .geo-audit.toml config file (default: auto-discover in CWD).",
+    )
+
+    common = argparse.ArgumentParser(add_help=False, parents=[config_common])
     common.add_argument("target", help="Path to an HTML/Markdown file, or a URL.")
     common.add_argument(
         "--format-in",
@@ -173,7 +228,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.set_defaults(func=_cmd_check)
 
-    scan = sub.add_parser("scan", help="Audit a local content corpus.")
+    fix = sub.add_parser("fix", parents=[common], help="Build a prioritized remediation plan.")
+    fix.add_argument(
+        "--format",
+        choices=("text", "md", "json"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    fix.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Limit output to the N highest-impact items (default: all).",
+    )
+    fix.set_defaults(func=_cmd_fix)
+
+    scan = sub.add_parser(
+        "scan",
+        parents=[config_common],
+        help="Audit a local content corpus.",
+    )
     scan.add_argument("paths", nargs="+", help="Local files or directories to scan.")
     scan.add_argument(
         "--format",
@@ -200,7 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     diff.set_defaults(func=_cmd_diff)
 
-    rules = sub.add_parser("rules", help="List all rules.")
+    rules = sub.add_parser("rules", parents=[config_common], help="List all rules.")
     rules.set_defaults(func=_cmd_rules)
 
     init = sub.add_parser("init-llms", parents=[common], help="Generate a llms.txt draft.")

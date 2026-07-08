@@ -6,7 +6,7 @@
 **AEO** (Answer Engine Optimization): the on-page signals that decide whether an
 AI answer engine quotes you or your competitor. It is **keyless, offline, and
 deterministic** - point it at an HTML or Markdown file (or a URL) and get a
-0-100 score plus a prioritized list of fixes.
+0-100 score, a prioritized remediation plan, and CI-friendly gates.
 
 No API keys. No tracking. No account. Just a score and a to-do list.
 
@@ -71,6 +71,10 @@ geo-audit check article.html --format md
 # Demo-ready static HTML output
 geo-audit check article.html --format html > report.html
 
+# Prioritized remediation plan
+geo-audit fix article.html
+geo-audit fix article.html --format md --top 5
+
 # Use it as a CI gate (exits non-zero below the threshold)
 geo-audit check article.html --min-score 70
 
@@ -85,9 +89,30 @@ geo-audit diff before.json after.json
 # List every rule and its weight
 geo-audit rules
 
+# Preview the effective rule set from config
+geo-audit rules --config .geo-audit.toml
+
 # Generate a starter llms.txt for your site
 geo-audit init-llms index.html --site-name "Your Brand"
 ```
+
+### Configure rule weights and defaults
+
+Create `.geo-audit.toml` in the working directory, or pass `--config PATH` to
+`check`, `scan`, `fix`, or `rules`.
+
+```toml
+[rules]
+weights = { answer-first = 4.0, canonical = 1.5 }
+disabled = ["social-card"]
+
+[defaults]
+min_score = 80
+```
+
+Config is local and deterministic. Unknown rule ids and non-positive weights are
+rejected with a clear error. `defaults.min_score` is used only when
+`--min-score` is omitted.
 
 ### Use it in CI
 
@@ -122,11 +147,15 @@ local files and directories, recursively scans `.html`, `.htm`, `.md`, and
 `.markdown` files in deterministic order, and reports the worst pages and worst
 rules across the corpus.
 
+Use `geo-audit fix` when you want the actionable counterpart to `diff`. It runs
+the same audit as `check`, sorts failing and warning rules by weighted score
+impact, and shows the projected points each complete fix can recover.
+
 Use `geo-audit diff` to close the edit-audit-measure loop. Save two
 `geo-audit check --format json` reports, then compare them to see overall score
 movement plus per-rule regressions and improvements.
 
-## What it checks (14 rules, 4 pillars)
+## What it checks (18 rules, 5 pillars)
 
 | Pillar | Rule | What it rewards |
 | --- | --- | --- |
@@ -144,6 +173,10 @@ movement plus per-rule regressions and improvements.
 | Authority | `outbound-citations` | Links to authoritative sources |
 | Authority | `author-eeat` | A named author (E-E-A-T signal) |
 | Freshness | `freshness-signal` | A visible, machine-readable date |
+| Multimedia | `alt-text` | Images with descriptive alt text |
+| Multimedia | `table-data` | Data tables with headers or captions |
+| Multimedia | `canonical` | A declared canonical URL |
+| Multimedia | `social-card` | Open Graph or Twitter card metadata |
 
 Run `geo-audit rules` to see weights. Every rule returns a score, a plain-English
 reason, and a concrete fix.

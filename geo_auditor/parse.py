@@ -13,7 +13,7 @@ from typing import Literal
 import markdown as md
 from bs4 import BeautifulSoup, Tag
 
-from geo_auditor.models import Document, Heading, Link
+from geo_auditor.models import Document, Heading, Image, Link
 
 Format = Literal["html", "markdown", "auto"]
 
@@ -95,11 +95,22 @@ def _extract(soup: BeautifulSoup) -> Document:
         external = href.startswith(("http://", "https://"))
         doc.links.append(Link(href=href, text=_tag_text(tag), external=external))
 
+    for tag in soup.find_all("img"):
+        if not isinstance(tag, Tag):
+            continue
+        src = str(tag.get("src", "")).strip()
+        if not src:
+            continue
+        alt = str(tag.get("alt", "")).strip()
+        doc.images.append(Image(src=src, alt=alt))
+
     doc.tables = len(soup.find_all("table"))
+    doc.data_tables = _count_data_tables(soup)
     doc.lists = len(soup.find_all(["ul", "ol"]))
 
     doc.json_ld = _extract_json_ld(soup)
     doc.meta = _extract_meta(soup)
+    doc.canonical = _extract_canonical(soup)
 
     doc.text = " ".join(str(soup.get_text(" ", strip=True)).split())
 
@@ -139,6 +150,32 @@ def _extract_meta(soup: BeautifulSoup) -> dict[str, str]:
         if isinstance(key, str) and isinstance(content, str):
             meta[key.lower()] = content
     return meta
+
+
+def _extract_canonical(soup: BeautifulSoup) -> str:
+    tag = soup.find("link", rel=lambda value: _has_rel(value, "canonical"))
+    if not isinstance(tag, Tag):
+        return ""
+    href = tag.get("href")
+    return href.strip() if isinstance(href, str) else ""
+
+
+def _has_rel(value: object, wanted: str) -> bool:
+    if isinstance(value, str):
+        return wanted in {part.lower() for part in value.split()}
+    if isinstance(value, list):
+        return any(isinstance(part, str) and part.lower() == wanted for part in value)
+    return False
+
+
+def _count_data_tables(soup: BeautifulSoup) -> int:
+    count = 0
+    for table in soup.find_all("table"):
+        if not isinstance(table, Tag):
+            continue
+        if table.find("th") or table.find("caption"):
+            count += 1
+    return count
 
 
 def _has_faq_schema(json_ld: list[dict[str, object]]) -> bool:

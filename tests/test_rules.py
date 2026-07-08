@@ -13,6 +13,12 @@ from geo_auditor.rules.machine import (
     JsonLdRule,
     MetaTagsRule,
 )
+from geo_auditor.rules.multimedia import (
+    AltTextRule,
+    CanonicalRule,
+    SocialCardRule,
+    TableDataRule,
+)
 from geo_auditor.rules.structure import (
     AnswerFirstRule,
     ContentDepthRule,
@@ -23,8 +29,8 @@ from geo_auditor.rules.structure import (
 )
 
 
-def test_registry_has_14_rules() -> None:
-    assert len(ALL_RULES) == 14
+def test_registry_has_18_rules() -> None:
+    assert len(ALL_RULES) == 18
     ids = [r.id for r in ALL_RULES]
     assert len(ids) == len(set(ids)), "rule ids must be unique"
 
@@ -37,7 +43,7 @@ def test_audit_returns_one_result_per_rule(strong_doc: Document) -> None:
 def test_strong_doc_mostly_passes(strong_doc: Document) -> None:
     results = audit(strong_doc)
     passed = [r for r in results if r.severity is Severity.PASS]
-    assert len(passed) >= 12
+    assert len(passed) >= 16
 
 
 def test_weak_doc_mostly_fails(weak_doc: Document) -> None:
@@ -161,6 +167,51 @@ def test_freshness_rule_levels() -> None:
     text_only = Document(dates=["2020"])
     assert FreshnessRule().check(text_only).score == 0.5
     assert FreshnessRule().check(Document()).severity is Severity.FAIL
+
+
+def test_alt_text_rule() -> None:
+    from geo_auditor.models import Image
+
+    good = Document(images=[Image(src="/a.jpg", alt="Useful chart")])
+    assert AltTextRule().check(good).passed
+    partial = Document(
+        images=[Image(src="/a.jpg", alt="Useful chart"), Image(src="/b.jpg", alt="")]
+    )
+    assert partial.images[1].alt == ""
+    assert AltTextRule().check(partial).score == 0.5
+    assert AltTextRule().check(Document()).severity is Severity.FAIL
+
+
+def test_table_data_rule() -> None:
+    assert TableDataRule().check(Document(tables=2, data_tables=2)).passed
+    assert TableDataRule().check(Document(tables=2, data_tables=1)).score == 0.5
+    assert TableDataRule().check(Document()).severity is Severity.FAIL
+
+
+def test_canonical_rule() -> None:
+    assert CanonicalRule().check(Document(canonical="https://example.com/page")).passed
+    assert CanonicalRule().check(Document()).severity is Severity.FAIL
+
+
+def test_social_card_rule() -> None:
+    og = Document(
+        meta={
+            "og:title": "Title",
+            "og:description": "Description",
+            "og:image": "https://example.com/image.jpg",
+        }
+    )
+    assert SocialCardRule().check(og).passed
+    twitter = Document(meta={"twitter:card": "summary_large_image"})
+    assert SocialCardRule().check(twitter).passed
+    partial = Document(meta={"og:title": "Title"})
+    assert SocialCardRule().check(partial).score == 1 / 3
+    assert SocialCardRule().check(Document()).severity is Severity.FAIL
+
+
+def test_multimedia_rules_on_markdown_input(weak_doc: Document) -> None:
+    for rule in (AltTextRule(), TableDataRule(), CanonicalRule(), SocialCardRule()):
+        assert rule.check(weak_doc).severity is Severity.FAIL
 
 
 def test_every_category_represented() -> None:

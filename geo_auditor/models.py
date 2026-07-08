@@ -11,12 +11,13 @@ from enum import StrEnum
 
 
 class Category(StrEnum):
-    """The four pillars an answer engine cares about."""
+    """The five pillars an answer engine cares about."""
 
     STRUCTURE = "structure"
     MACHINE_READABLE = "machine-readable"
     AUTHORITY = "authority"
     FRESHNESS = "freshness"
+    MULTIMEDIA = "multimedia"
 
 
 class Severity(StrEnum):
@@ -52,6 +53,14 @@ class Link:
     external: bool
 
 
+@dataclass(frozen=True)
+class Image:
+    """An image extracted from the document."""
+
+    src: str
+    alt: str
+
+
 @dataclass
 class Document:
     """Normalized view of a page, format-agnostic (HTML or Markdown)."""
@@ -61,10 +70,13 @@ class Document:
     headings: list[Heading] = field(default_factory=list)
     paragraphs: list[str] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
+    images: list[Image] = field(default_factory=list)
     tables: int = 0
+    data_tables: int = 0
     lists: int = 0
     json_ld: list[dict[str, object]] = field(default_factory=list)
     meta: dict[str, str] = field(default_factory=dict)
+    canonical: str = ""
     text: str = ""
     has_faq: bool = False
     has_summary: bool = False

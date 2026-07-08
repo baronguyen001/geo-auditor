@@ -24,6 +24,12 @@ def test_parse_strong_html(strong_doc: Document) -> None:
     assert strong_doc.lists >= 1
     assert strong_doc.meta["author"] == "Jordan Rivera"
     assert "description" in strong_doc.meta
+    assert strong_doc.meta["og:title"].startswith("How to Brew")
+    assert strong_doc.meta["twitter:card"] == "summary_large_image"
+    assert strong_doc.canonical == "https://example.com/cold-brew-guide"
+    assert strong_doc.images[0].alt.startswith("Cold brew coffee")
+    assert strong_doc.tables == 1
+    assert strong_doc.data_tables == 1
     assert strong_doc.word_count > 300
 
 
@@ -65,7 +71,31 @@ def test_markdown_tables_and_lists() -> None:
     doc = parse_content(md_text, fmt="markdown")
     assert doc.lists >= 1
     assert doc.tables >= 1
+    assert doc.data_tables >= 1
     assert any(h.text.endswith("?") for h in doc.headings)
+
+
+def test_parser_detects_partial_multimedia_signals() -> None:
+    html = """
+    <html>
+      <head>
+        <link rel="canonical" href="https://example.com/page">
+        <meta property="og:title" content="Title">
+      </head>
+      <body>
+        <img src="/a.jpg" alt="A useful chart">
+        <img src="/b.jpg" alt="">
+        <table><tr><td>layout</td></tr></table>
+        <table><tr><th>metric</th></tr><tr><td>42</td></tr></table>
+      </body>
+    </html>
+    """
+    doc = parse_content(html, fmt="html")
+    assert [image.alt for image in doc.images] == ["A useful chart", ""]
+    assert doc.tables == 2
+    assert doc.data_tables == 1
+    assert doc.canonical == "https://example.com/page"
+    assert doc.meta["og:title"] == "Title"
 
 
 def test_malformed_json_ld_is_ignored() -> None:

@@ -18,6 +18,12 @@ from geo_auditor.rules.machine import (
     JsonLdRule,
     MetaTagsRule,
 )
+from geo_auditor.rules.multimedia import (
+    AltTextRule,
+    CanonicalRule,
+    SocialCardRule,
+    TableDataRule,
+)
 from geo_auditor.rules.structure import (
     AnswerFirstRule,
     ContentDepthRule,
@@ -42,6 +48,10 @@ ALL_RULES: tuple[Rule, ...] = (
     CitationsRule(),
     AuthorRule(),
     FreshnessRule(),
+    AltTextRule(),
+    TableDataRule(),
+    CanonicalRule(),
+    SocialCardRule(),
 )
 
 
@@ -50,4 +60,12 @@ def audit(doc: Document, rules: Sequence[Rule] = ALL_RULES) -> list[RuleResult]:
     return [rule.check(doc) for rule in rules]
 
 
-__all__ = ["ALL_RULES", "Rule", "audit"]
+__all__ = [
+    "ALL_RULES",
+    "AltTextRule",
+    "CanonicalRule",
+    "Rule",
+    "SocialCardRule",
+    "TableDataRule",
+    "audit",
+]

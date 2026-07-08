@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from geo_auditor.models import RuleResult, Severity
 from geo_auditor.parse import parse_content
+from geo_auditor.rules import ALL_RULES
+from geo_auditor.rules.base import Rule
 from geo_auditor.score import build_report, grade_for
 
 _SUPPORTED_SUFFIXES = frozenset({".html", ".htm", ".md", ".markdown"})
@@ -116,7 +119,7 @@ def _summarize_rules(results_by_file: list[list[RuleResult]]) -> list[BatchRuleS
     )
 
 
-def scan_paths(paths: list[str]) -> BatchReport:
+def scan_paths(paths: list[str], rules: Sequence[Rule] = ALL_RULES) -> BatchReport:
     """Audit every supported local file under *paths* and return a batch report."""
 
     files = discover_files(paths)
@@ -128,7 +131,7 @@ def scan_paths(paths: list[str]) -> BatchReport:
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         doc = parse_content(text, fmt="auto")
-        report = build_report(doc)
+        report = build_report(doc, rules=rules)
         results_by_file.append(report.results)
         file_results.append(
             FileAudit(

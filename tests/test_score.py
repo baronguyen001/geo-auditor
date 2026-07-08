@@ -48,4 +48,4 @@ def test_by_category_only_includes_used_categories() -> None:
 def test_report_failed_and_warnings_helpers(weak_doc: Document) -> None:
     report = build_report(weak_doc)
     assert report.failed
-    assert len(report.results) == 14
+    assert len(report.results) == 18
