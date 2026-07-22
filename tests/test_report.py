@@ -26,9 +26,10 @@ def test_render_json_is_valid_and_ascii(strong_doc: Document) -> None:
     assert _is_ascii(out)
     data = json.loads(out)
     assert data["grade"] in {"A", "B"}
-    assert len(data["results"]) == 18
+    assert len(data["results"]) == 21
     assert "by_category" in data
     assert "multimedia" in data["by_category"]
+    assert "readability" in data["by_category"]
 
 
 def test_render_markdown(strong_doc: Document) -> None:

@@ -136,6 +136,37 @@ def test_diff_json_format(capsys: pytest.CaptureFixture[str], tmp_path: Path) ->
     assert json.loads(out)["score_delta"] == 100
 
 
+def test_diff_html_format(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(
+        json.dumps(
+            {
+                "score": 80,
+                "grade": "B",
+                "results": [{"rule_id": "a", "title": "A", "score": 1.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    after.write_text(
+        json.dumps(
+            {
+                "score": 70,
+                "grade": "C",
+                "results": [{"rule_id": "a", "title": "A", "score": 0.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    code = main(["diff", str(before), str(after), "--format", "html"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("<!doctype html>")
+    assert "GEO/AEO audit diff" in out
+    assert "REGRESSION" in out
+
+
 def test_diff_malformed_json(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     before = tmp_path / "before.json"
     after = tmp_path / "after.json"
@@ -154,6 +185,8 @@ def test_rules_command(capsys: pytest.CaptureFixture[str]) -> None:
     assert "answer-first" in out
     assert "freshness-signal" in out
     assert "alt-text" in out
+    assert "sentence-length" in out
+    assert "[readability" in out
 
 
 def test_rules_command_honors_config(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
@@ -218,6 +251,15 @@ def test_fix_markdown(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) ->
     out = capsys.readouterr().out
     assert code == 0
     assert out.startswith("# GEO/AEO remediation plan")
+
+
+def test_fix_html(capsys: pytest.CaptureFixture[str], fixtures_dir: Path) -> None:
+    code = main(["fix", str(fixtures_dir / "weak_page.md"), "--format", "html"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.startswith("<!doctype html>")
+    assert "GEO/AEO remediation plan" in out
+    assert "Recoverable points" in out
 
 
 def test_fix_honors_config(

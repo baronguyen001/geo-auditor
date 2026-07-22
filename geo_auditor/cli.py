@@ -29,9 +29,11 @@ from geo_auditor.report import (
     render_batch_json,
     render_batch_markdown,
     render_batch_text,
+    render_diff_html,
     render_html,
     render_json,
     render_markdown,
+    render_remediation_html,
     render_text,
 )
 from geo_auditor.rules import ALL_RULES
@@ -135,6 +137,7 @@ def _cmd_fix(args: argparse.Namespace) -> int:
         "text": render_remediation_text,
         "json": render_remediation_json,
         "md": render_remediation_markdown,
+        "html": render_remediation_html,
     }
     print(renderers[args.format](plan))
     return 0
@@ -150,6 +153,7 @@ def _cmd_diff(args: argparse.Namespace) -> int:
         "text": render_diff_text,
         "json": render_diff_json,
         "md": render_diff_markdown,
+        "html": render_diff_html,
     }
     print(renderers[args.format](diff))
     return 0
@@ -231,7 +235,7 @@ def build_parser() -> argparse.ArgumentParser:
     fix = sub.add_parser("fix", parents=[common], help="Build a prioritized remediation plan.")
     fix.add_argument(
         "--format",
-        choices=("text", "md", "json"),
+        choices=("text", "md", "json", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -268,7 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("after_json", help="Later geo-audit check --format json output.")
     diff.add_argument(
         "--format",
-        choices=("text", "json", "md"),
+        choices=("text", "json", "md", "html"),
         default="text",
         help="Output format (default: text).",
     )

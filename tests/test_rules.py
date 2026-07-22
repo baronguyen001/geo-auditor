@@ -19,6 +19,11 @@ from geo_auditor.rules.multimedia import (
     SocialCardRule,
     TableDataRule,
 )
+from geo_auditor.rules.readability import (
+    DescriptiveAnchorRule,
+    ParagraphLengthRule,
+    SentenceLengthRule,
+)
 from geo_auditor.rules.structure import (
     AnswerFirstRule,
     ContentDepthRule,
@@ -29,10 +34,11 @@ from geo_auditor.rules.structure import (
 )
 
 
-def test_registry_has_18_rules() -> None:
-    assert len(ALL_RULES) == 18
+def test_registry_has_21_rules() -> None:
+    assert len(ALL_RULES) == 21
     ids = [r.id for r in ALL_RULES]
     assert len(ids) == len(set(ids)), "rule ids must be unique"
+    assert any(r.category is Category.READABILITY for r in ALL_RULES)
 
 
 def test_audit_returns_one_result_per_rule(strong_doc: Document) -> None:
@@ -212,6 +218,47 @@ def test_social_card_rule() -> None:
 def test_multimedia_rules_on_markdown_input(weak_doc: Document) -> None:
     for rule in (AltTextRule(), TableDataRule(), CanonicalRule(), SocialCardRule()):
         assert rule.check(weak_doc).severity is Severity.FAIL
+
+
+def test_sentence_length_rule_scores_concise_long_and_empty_text() -> None:
+    rule = SentenceLengthRule()
+    concise = Document(text="Short answers help. Clear writing is easy to cite.")
+    long_sentence = Document(text=" ".join(["word"] * 45) + ".")
+
+    assert rule.check(concise).passed
+    assert rule.check(long_sentence).severity is Severity.FAIL
+    assert rule.check(Document()).severity is Severity.FAIL
+    assert "No sentence text" in rule.check(Document()).detail
+
+
+def test_paragraph_length_rule_scores_concise_long_and_empty_paragraphs() -> None:
+    rule = ParagraphLengthRule()
+    concise = Document(paragraphs=[" ".join(["word"] * 40), " ".join(["word"] * 60)])
+    long_para = Document(paragraphs=[" ".join(["word"] * 170)])
+
+    assert rule.check(concise).passed
+    assert rule.check(long_para).severity is Severity.FAIL
+    assert rule.check(Document()).severity is Severity.FAIL
+    assert "No paragraphs" in rule.check(Document()).detail
+
+
+def test_descriptive_anchor_rule_scores_generic_descriptive_and_no_links() -> None:
+    from geo_auditor.models import Link
+
+    rule = DescriptiveAnchorRule()
+    mixed = Document(
+        links=[
+            Link("https://example.com/a", "cold brew ratio study", True),
+            Link("https://example.com/b", "read more", True),
+            Link("https://example.com/c", "", True),
+        ]
+    )
+    no_links = rule.check(Document())
+
+    assert rule.check(Document(links=[Link("https://example.com/a", "source data", True)])).passed
+    assert rule.check(mixed).score == 1 / 3
+    assert no_links.passed
+    assert no_links.detail == "No links to evaluate."
 
 
 def test_every_category_represented() -> None:

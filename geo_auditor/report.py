@@ -8,9 +8,14 @@ from __future__ import annotations
 
 import html
 import json
+from typing import TYPE_CHECKING
 
 from geo_auditor.batch import BatchReport
 from geo_auditor.models import AuditReport, RuleResult, Severity
+
+if TYPE_CHECKING:
+    from geo_auditor.diff import AuditDiff
+    from geo_auditor.remediate import RemediationPlan
 
 _SEVERITY_TAG = {
     Severity.PASS: "PASS",
@@ -315,6 +320,103 @@ def render_batch_html(report: BatchReport) -> str:
     )
 
 
+def render_remediation_html(plan: RemediationPlan) -> str:
+    rows = []
+    for index, item in enumerate(plan.items, start=1):
+        rows.append(
+            "<tr>"
+            f"<td>{index}</td>"
+            f'<td><span class="status status-{_escape(item.severity.value)}">'
+            f"{_escape(item.severity.value.upper())}</span></td>"
+            f"<td>{_escape(item.title)}<br><small>{_escape(item.rule_id)}</small></td>"
+            f"<td>{_escape(item.category.value)}</td>"
+            f"<td>{int(item.score * 100)}%</td>"
+            f"<td>+{item.projected_points:.2f}</td>"
+            f"<td>{_escape(item.fix or 'No fix needed.')}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="7">No failing or warning rules.</td></tr>')
+    return _html_page(
+        "GEO/AEO remediation plan",
+        f"""
+<section class="summary">
+  <div>
+    <p class="label">Recoverable points</p>
+    <p class="score">{plan.total_recoverable_points:.2f}<span> pts</span></p>
+  </div>
+</section>
+<section>
+  <h2>Fixes</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Rank</th><th>Status</th><th>Rule</th><th>Category</th>
+        <th>Score</th><th>Projected gain</th><th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+</section>
+""",
+    )
+
+
+def render_diff_html(diff: AuditDiff) -> str:
+    rows = []
+    for delta in diff.rule_deltas:
+        rows.append(
+            "<tr>"
+            f'<td><span class="status status-{_escape(delta.status)}">'
+            f"{_escape(delta.status.upper())}</span></td>"
+            f"<td>{_escape(delta.title)}<br><small>{_escape(delta.rule_id)}</small></td>"
+            f"<td>{_escape(_format_optional_score(delta.before_score))}</td>"
+            f"<td>{_escape(_format_optional_score(delta.after_score))}</td>"
+            f"<td>{_escape(_format_optional_delta(delta.delta))}</td>"
+            "</tr>"
+        )
+    return _html_page(
+        "GEO/AEO audit diff",
+        f"""
+<section class="summary">
+  <div>
+    <p class="label">Score movement</p>
+    <p class="score">{diff.before_score}<span>/100</span> to {diff.after_score}<span>/100</span></p>
+  </div>
+  <div class="grade grade-{_escape(diff.after_grade.lower())}">{_escape(diff.after_grade)}</div>
+</section>
+<section>
+  <h2>Overall</h2>
+  <table>
+    <tbody>
+      <tr><th>Score delta</th><td>{diff.score_delta:+d}</td></tr>
+      <tr><th>Grade</th><td>{_escape(diff.before_grade)} to {_escape(diff.after_grade)}</td></tr>
+    </tbody>
+  </table>
+</section>
+<section>
+  <h2>Rule changes</h2>
+  <table>
+    <thead><tr><th>Status</th><th>Rule</th><th>Before</th><th>After</th><th>Delta</th></tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table>
+</section>
+""",
+    )
+
+
+def _format_optional_score(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{int(round(value * 100))}%"
+
+
+def _format_optional_delta(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value * 100:+.0f}pp"
+
+
 def _html_page(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="en">
@@ -393,6 +495,9 @@ def _html_page(title: str, body: str) -> str:
     .status-pass {{ color: var(--good); }}
     .status-warn {{ color: var(--warn); }}
     .status-fail {{ color: var(--bad); }}
+    .status-regression, .status-removed {{ color: var(--bad); }}
+    .status-improvement, .status-added {{ color: var(--good); }}
+    .status-unchanged {{ color: var(--muted); }}
     .bar {{ height: 12px; width: 100%; background: #e8edf1; border-radius: 6px; overflow: hidden; }}
     .bar span {{ display: block; height: 100%; background: var(--accent); }}
     .category-table th {{ width: 180px; }}

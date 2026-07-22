@@ -11,13 +11,14 @@ from enum import StrEnum
 
 
 class Category(StrEnum):
-    """The five pillars an answer engine cares about."""
+    """The six pillars an answer engine cares about."""
 
     STRUCTURE = "structure"
     MACHINE_READABLE = "machine-readable"
     AUTHORITY = "authority"
     FRESHNESS = "freshness"
     MULTIMEDIA = "multimedia"
+    READABILITY = "readability"
 
 
 class Severity(StrEnum):

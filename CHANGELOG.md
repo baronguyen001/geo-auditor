@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-22
+
+### Added
+- A readability pillar adds `sentence-length`, `paragraph-length`, and
+  `descriptive-anchor` rules, raising the built-in rule count from 18 to 21.
+- `geo-audit fix --format html` renders a self-contained, no-JavaScript
+  remediation report sorted by projected point gain.
+- `geo-audit diff --format html` renders a self-contained, no-JavaScript diff
+  report with overall score movement and per-rule deltas.
+
 ## [0.3.0] - 2026-07-08
 
 ### Added

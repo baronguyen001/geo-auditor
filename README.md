@@ -74,6 +74,7 @@ geo-audit check article.html --format html > report.html
 # Prioritized remediation plan
 geo-audit fix article.html
 geo-audit fix article.html --format md --top 5
+geo-audit fix article.html --format html > remediation.html
 
 # Use it as a CI gate (exits non-zero below the threshold)
 geo-audit check article.html --min-score 70
@@ -85,6 +86,7 @@ geo-audit scan content/ --format md --min-score 75
 geo-audit check before.html --format json > before.json
 geo-audit check after.html --format json > after.json
 geo-audit diff before.json after.json
+geo-audit diff before.json after.json --format html > diff.html
 
 # List every rule and its weight
 geo-audit rules
@@ -138,9 +140,12 @@ print(render_markdown(report))
 
 ## Workflow reports
 
-Use `--format html` for a self-contained, printable report with the overall
-grade, category bars, and the worst-first checks table. It has inline CSS only:
-no JavaScript, no CDN, no fonts, and no network access.
+Use `--format html` for self-contained, printable reports. `check` includes the
+overall grade, category bars, and the worst-first checks table. `scan` includes
+corpus-level score, file leaderboard, and worst rules. `fix` renders the
+weighted remediation plan, and `diff` renders score movement plus per-rule
+deltas. HTML reports have inline CSS only: no JavaScript, no CDN, no fonts, and
+no network access.
 
 Use `geo-audit scan` when a content folder matters more than one page. It accepts
 local files and directories, recursively scans `.html`, `.htm`, `.md`, and
@@ -149,13 +154,15 @@ rules across the corpus.
 
 Use `geo-audit fix` when you want the actionable counterpart to `diff`. It runs
 the same audit as `check`, sorts failing and warning rules by weighted score
-impact, and shows the projected points each complete fix can recover.
+impact, and shows the projected points each complete fix can recover. Output
+formats: `text`, `md`, `json`, and `html`.
 
 Use `geo-audit diff` to close the edit-audit-measure loop. Save two
 `geo-audit check --format json` reports, then compare them to see overall score
-movement plus per-rule regressions and improvements.
+movement plus per-rule regressions and improvements. Output formats: `text`,
+`md`, `json`, and `html`.
 
-## What it checks (18 rules, 5 pillars)
+## What it checks (21 rules, 6 pillars)
 
 | Pillar | Rule | What it rewards |
 | --- | --- | --- |
@@ -177,6 +184,9 @@ movement plus per-rule regressions and improvements.
 | Multimedia | `table-data` | Data tables with headers or captions |
 | Multimedia | `canonical` | A declared canonical URL |
 | Multimedia | `social-card` | Open Graph or Twitter card metadata |
+| Readability | `sentence-length` | Short sentences that are easy to quote |
+| Readability | `paragraph-length` | Concise paragraphs instead of walls of text |
+| Readability | `descriptive-anchor` | Link text that describes the destination |
 
 Run `geo-audit rules` to see weights. Every rule returns a score, a plain-English
 reason, and a concrete fix.

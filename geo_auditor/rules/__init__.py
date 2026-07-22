@@ -24,6 +24,11 @@ from geo_auditor.rules.multimedia import (
     SocialCardRule,
     TableDataRule,
 )
+from geo_auditor.rules.readability import (
+    DescriptiveAnchorRule,
+    ParagraphLengthRule,
+    SentenceLengthRule,
+)
 from geo_auditor.rules.structure import (
     AnswerFirstRule,
     ContentDepthRule,
@@ -52,6 +57,9 @@ ALL_RULES: tuple[Rule, ...] = (
     TableDataRule(),
     CanonicalRule(),
     SocialCardRule(),
+    SentenceLengthRule(),
+    ParagraphLengthRule(),
+    DescriptiveAnchorRule(),
 )
 
 
@@ -64,7 +72,10 @@ __all__ = [
     "ALL_RULES",
     "AltTextRule",
     "CanonicalRule",
+    "DescriptiveAnchorRule",
+    "ParagraphLengthRule",
     "Rule",
+    "SentenceLengthRule",
     "SocialCardRule",
     "TableDataRule",
     "audit",
